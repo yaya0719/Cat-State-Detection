@@ -48,7 +48,7 @@ flowchart TD
     B --> C[過濾與格式轉換]
     C --> D[DeepSORT 追蹤]
     D --> E[追蹤結果標記]
-    A --> F[ViViT 影片分類]
+    E --> F[ViViT 影片分類]
     F --> G[分類結果輸出]
     E --> H[影片/報告輸出]
     G --> H

@@ -15,9 +15,6 @@ def train_yolo():
     # 驗證模型表現
     metrics = model.val()
 
-    # 物件偵測測試
-    results = model("C:/Users/iceca/Desktop/dd/coco128/images/train2017/000000000049.jpg")
-    results[0].show()
 
     # 匯出 ONNX 模型
     path = model.export(format="onnx")

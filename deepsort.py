@@ -1,74 +1,104 @@
 import numpy as np
 import cv2
+import os
 from ultralytics import YOLO
 from deep_sort_realtime.deepsort_tracker import DeepSort
 
 # 載入 YOLOv11 模型
-model = YOLO('yolo11n.pt')
+model = YOLO('C:/Users/iceca/Desktop/dd/runs/detect/train27/weights/best.pt')
 
 # 讀取影片
-cap = cv2.VideoCapture("C:/Users/iceca/Desktop/dd/cat.mp4")
+cap = cv2.VideoCapture("C:/Users/iceca/Desktop/ViViT-Implementation-main/meowing.mp4")
 fps = cap.get(cv2.CAP_PROP_FPS)
 size = (int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)))
 fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-videoWriter = cv2.VideoWriter("C:/Users/iceca/Desktop/dd/catrack.mp4", fourcc, fps, size)
+videoWriter = cv2.VideoWriter("C:/Users/iceca/Desktop/dd/testmwoqin.mp4", fourcc, 24, size)
 
 # 初始化 DeepSORT 追蹤器
-tracker = DeepSort(max_age=5)
+tracker = DeepSort(max_age=30, n_init=10, embedder="clip_ViT-B/16")
 
-# 定義標註函式
-def box_label(image, box, label='', color=(0, 255, 0), txt_color=(255, 255, 255)):
-    p1, p2 = (int(box[0]), int(box[1])), (int(box[2]), int(box[3]))
-    cv2.rectangle(image, p1, p2, color, thickness=2, lineType=cv2.LINE_AA)
-    if label:
-        w, h = cv2.getTextSize(label, 0, fontScale=1, thickness=2)[0]
-        outside = p1[1] - h >= 3
-        p2 = p1[0] + w, p1[1] - h - 3 if outside else p1[1] + h + 3
-        cv2.rectangle(image, p1, p2, color, -1, cv2.LINE_AA)
-        cv2.putText(image, label, (p1[0], p1[1] - 2 if outside else p1[1] + h + 2), 
-                    0, 1, txt_color, thickness=2, lineType=cv2.LINE_AA)
+# 儲存影像的資料夾
+output_dir = "C:/Users/iceca/Desktop/dd/cat_clips"
+os.makedirs(output_dir, exist_ok=True)
+track_clips = {}  # 用來儲存不同追蹤 ID 的影格
 
 # 讀取影片逐幀處理
+frame_id = 0  
 while cap.isOpened():
     success, frame = cap.read()
     if not success:
         break
 
-    # 執行 YOLO 物件偵測，設定信心值 conf=0.4
-    results = model(frame, conf=0.4)
+    frame_id += 1  
+    
+    # 執行 YOLO 物件偵測，設定信心值 conf=0.6
+    results = model.predict(frame, conf=0.6)
     outputs = results[0].boxes.data.cpu().numpy()
 
-    # 儲存貓的偵測結果
     detections = []
-    
     if outputs is not None:
         for output in outputs:
-            x1, y1, x2, y2 = list(map(int, output[:4]))  # 取得邊界框
-            class_id = int(output[5])  # 取得類別 ID
+            x1, y1, x2, y2 = list(map(int, output[:4]))
+            class_id = int(output[5])
             
-            # 只保留 "cat" (類別 ID = 15)
-            if class_id == 15:
-                detections.append(([x1, y1, int(x2-x1), int(y2-y1)], output[4], 'cat'))
+            if class_id == 15:  # 只保留 "cat"
+                detections.append(([x1, y1, x2 - x1, y2 - y1], output[4], 'cat'))
 
         # 更新追蹤器
         tracks = tracker.update_tracks(detections, frame=frame)
-
-        # 畫出追蹤框
+        
         for track in tracks:
             if not track.is_confirmed():
                 continue
             track_id = track.track_id
             bbox = track.to_ltrb()
-            box_label(frame, bbox, f'Cat #{track_id}', (0, 255, 0))  # 綠色框標註
+            x1, y1, x2, y2 = map(int, bbox)
+            
+            # 裁剪影像
+            cropped = frame[y1:y2, x1:x2]
+            if cropped.size == 0:
+                continue
 
-    # 顯示畫面並存檔
-    cv2.imshow("Cat Tracking", frame)
+            # 重新調整尺寸 (符合 ViViT 模型輸入)
+            cropped_resized = cv2.resize(cropped, (224, 224))
+            
+            # 儲存影格到對應的追蹤 ID 資料夾
+            track_folder = os.path.join(output_dir, f"track_{track_id}")
+            os.makedirs(track_folder, exist_ok=True)
+            cv2.imwrite(os.path.join(track_folder, f"frame_{frame_id}.jpg"), cropped_resized)
+            
+            # 儲存追蹤 ID 的影格
+            if track_id not in track_clips:
+                track_clips[track_id] = []
+            track_clips[track_id].append(cropped_resized)
+            
+            # 畫出追蹤框
+            cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+            cv2.putText(frame, f'Cat #{track_id}', (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+
+
+   
     videoWriter.write(frame)
 
-    if cv2.waitKey(1) & 0xFF == ord("q"):  # 按 Q 退出
-        break
+   
 
 # 釋放資源
 cap.release()
 videoWriter.release()
-cv2.destroyAllWindows()
+
+
+print("處理完成，影像已儲存至:", output_dir)
+
+# 輸出追蹤影片
+for track_id, frames in track_clips.items():
+    # 設定影片輸出檔案路徑
+    track_video_path = os.path.join(output_dir, f"track_{track_id}.mp4")
+    # (此處所有的影格都已重新調整至 224x224)
+    height, width, _ = frames[0].shape
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    out = cv2.VideoWriter(track_video_path, fourcc, 24, (width, height))
+    
+    for frame in frames:
+        out.write(frame)
+    out.release()
+    print(f"追蹤影片儲存完成：{track_video_path}")

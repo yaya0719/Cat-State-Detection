@@ -45,7 +45,7 @@
 ```mermaid
 flowchart TD
 
-    C --> D[YOLO Queue]
+    C[frame input] --> D[YOLO Queue]
     D --> D1[YOLOv11 Detection Thread]
     D1 --> E[Detection Result]
 

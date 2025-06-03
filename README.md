@@ -44,8 +44,7 @@
 
 ```mermaid
 flowchart TD
-    A[gRPC Client 手機串流影像] --> B[StreamImages 處理器（每連線一個 thread）]
-    B --> C[Frame 輸入（單張）]
+
     C --> D[YOLO Queue]
     D --> D1[YOLOv11 Detection Thread]
     D1 --> E[Detection Result]

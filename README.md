@@ -44,13 +44,26 @@
 
 ```mermaid
 flowchart TD
-    A[影片輸入] --> B[YOLOv11 目標偵測]
-    B --> C[過濾與格式轉換]
-    C --> D[DeepSORT 追蹤]
-    D --> E[追蹤結果標記]
-    E --> F[ViViT 影片分類]
-    F --> G[分類結果輸出]
-    G --> H[影片/報告輸出]
+    A[gRPC Client 手機串流影像] --> B[StreamImages 處理器（每連線一個 thread）]
+    B --> C[Frame 輸入（單張）]
+    C --> D[YOLO Queue]
+    D --> D1[YOLOv11 Detection Thread]
+    D1 --> E[Detection Result]
+
+    E --> F[DeepSORT Queue]
+    F --> F1[DeepSORT Tracking Thread]
+    F1 --> G[Track ID & Cropped Frame]
+
+    G --> H[ViViT Queue]
+    H --> H1[ViViT Frame Accumulator]
+    H1 -->|累積達 NUM_FRAMES| I[Predict Queue]
+    I --> I1[ViViT Predict Thread (非同步)]
+
+    H1 --> J[Frame 標註（含最新行為）]
+    J --> K[gRPC 回傳已處理 Frame]
+
+    I1 --> H1[預測結果回寫至對應 Track Label]
+
 
 ```
 

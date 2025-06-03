@@ -52,17 +52,17 @@ flowchart TD
 
     E --> F[DeepSORT Queue]
     F --> F1[DeepSORT Tracking Thread]
-    F1 --> G[Track ID & Cropped Frame]
+    F1 --> G[Track ID + Cropped Frame]
 
     G --> H[ViViT Queue]
-    H --> H1[ViViT Frame Accumulator]
-    H1 -->|累積達 NUM_FRAMES| I[Predict Queue]
-    I --> I1[ViViT Predict Thread (非同步)]
+    H --> H1[Frame Accumulator]
+    H1 --> I[若達 NUM_FRAMES → Predict Queue]
+    I --> J[ViViT Predict Thread（非同步）]
+    J --> K[更新 Track Label 結果]
 
-    H1 --> J[Frame 標註（含最新行為）]
-    J --> K[gRPC 回傳已處理 Frame]
+    H1 --> L[Frame 標註（含分類結果）]
+    L --> M[gRPC 回傳已處理 Frame]
 
-    I1 --> H1[預測結果回寫至對應 Track Label]
 
 
 ```

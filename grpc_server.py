@@ -26,12 +26,12 @@ NUM_LAYERS_TEMPORAL = 2
 PATCH_SIZE = 16
 TUBELET_SIZE = 2
 DATASET_PATH = "C:/Users/iceca/Desktop/ViViT-Implementation-main/test" #vivit分類類別資料夾
-MODEL_PATH = "C:/Users/iceca/Desktop/ViViT-Implementation-main/best_mode_36l.pth" #vivit model
+MODEL_PATH = "models/vivit_model.pth" #vivit model
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # 模型載入
-yolo_model = YOLO("C:/Users/iceca/Desktop/dd/runs/detect/train27/weights/best.pt") # YOLOv11 模型路徑
+yolo_model = YOLO("models/yolo11n.pt") # YOLOv11 模型路徑
 tracker = DeepSort(max_age=30, n_init=5, embedder="clip_ViT-B/16")
 vivit_model = ViViT_Factorized(
     in_channels=3, embed_dim=EMBED_DIM, patch_size=PATCH_SIZE, tubelet_size=TUBELET_SIZE,

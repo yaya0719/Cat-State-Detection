@@ -77,7 +77,6 @@ flowchart TD
 - OpenCV
 - Ultralytics YOLO (請確保你已經獲取 YOLOv11 的模型檔案)
 - DeepSORT (deep_sort_realtime)
-- ViViT 依賴庫（根據你所採用的 ViViT 實現，可參考官方文件）
 
 ### 2. 安裝依賴
 
@@ -94,8 +93,7 @@ pip install torch torchvision
 pip install opencv-python
 pip install ultralytics
 pip install deep_sort_realtime
-pip install timm  # 如果 ViViT 所需
-# 根據你的 ViViT 實現安裝其他依賴
+
 ```
 
 ---
@@ -108,16 +106,15 @@ pip install timm  # 如果 ViViT 所需
 
 2. **修改參數**  
    - 根據需求編輯程式碼中的參數，例如輸入影片路徑、輸出影片路徑、信心閾值、追蹤器參數（如 `max_age`）等。
-   - 可根據物件種類需求（例如只偵測貓）修改 YOLO 偵測過濾條件。
 
 3. **執行主程式**  
    運行主程式，即可進行影片的目標偵測、追蹤及分類：
    ```bash
-   python main.py
+   python grpc_server.py
    ```
 
 4. **查看輸出**  
-   程式將會在視窗中顯示追蹤與分類結果，同時生成標記後的影片檔案。
+   程式將會架設flask server已接收手機app傳輸之串流並進行及時分類。
 
 ---
 
@@ -129,22 +126,18 @@ YOLOv11-DeepSORT-ViViT/
 ├── models/
 │   ├── yolov11.pt
 │   ├── vivit_model.pth
-├── videos/
-│   ├── input_video.mp4
-│   └── output_video.mp4
-├── main.py
+├── grpc_server.py
 ├── README.md
 └── requirements.txt
 ```
 
-在 `main.py` 中整合了 YOLOv11、DeepSORT 與 ViViT 的調用範例，請參考內部註解瞭解如何使用各模組。
+在 `grpc_server.py` 中整合了 YOLOv11、DeepSORT 與 ViViT 的調用範例，請參考內部註解瞭解如何使用各模組。
 
 ---
 
 ## 未來計劃
 
 - **多類別支援**：除貓之外擴展其他物件類別的偵測與追蹤。
-- **線上部署**：結合 Flask 或 FastAPI 實現線上視訊監控系統。
 - **性能優化**：透過模型剪枝與量化，提升實時處理速度。
 - **多模態融合**：整合更多語意信息，提升影片分類準確度。
 

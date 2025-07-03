@@ -124,7 +124,7 @@ pip install deep_sort_realtime
 ```
 YOLOv11-DeepSORT-ViViT/
 ├── models/
-│   ├── yolov11.pt
+│   ├── yolo11n.pt
 │   ├── vivit_model.pth
 ├── grpc_server.py
 ├── README.md

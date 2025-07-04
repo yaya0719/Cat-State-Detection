@@ -122,6 +122,7 @@ YOLOv11-DeepSORT-ViViT/
 ├── models/
 │   ├── yolo11n.pt
 │   ├── vivit_model.pth
+│   ├── class.txt
 ├── grpc_server.py
 ├── README.md
 └── requirements.txt

@@ -94,7 +94,10 @@ flowchart TD
 
 ### 2. 安裝依賴
 
-請先安裝虛擬環境（可選）並安裝相應依賴：
+安裝已訓練過的yolo model(best.pt)
+https://drive.google.com/drive/folders/17Z2FRdZFr2-OWmDI5I_4xlqVQeWkCLvg?usp=drive_link
+
+安裝虛擬環境（可選）並安裝相應依賴：
 
 ```bash
 
@@ -105,7 +108,7 @@ pip install ultralytics
 pip install deep_sort_realtime
 
 ```
-
+ 
 ---
 
 ## 使用方法
@@ -134,7 +137,7 @@ pip install deep_sort_realtime
 ```
 YOLOv11-DeepSORT-ViViT/
 ├── models/
-│   ├── yolo11n.pt
+│   ├── best.pt
 │   ├── vivit_model.pth
 │   ├── class.txt
 ├── grpc_server.py

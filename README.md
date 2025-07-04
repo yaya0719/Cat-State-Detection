@@ -65,16 +65,21 @@ flowchart TD
 
 
 ```
+
+---
 ## 專案檔案說明
 
 | 檔名 | 說明 |
 |------|------|
-| dataset.py | 處理影片資料讀取與資料擴增 |
+| main.dart | 在flutter資料夾中的lib資料夾裡面，作為手機即時串流的程式碼，請下載完整flutter資料夾在打開 |
+| class.txt | vivit影片分類類別 |
 | model.py | ViViT 模型實作程式碼（使用 Model 2） |
 | model_util.py | 模型輔助功能，例如 patch 嵌入等工具函數 |
-| train.py | 模型訓練主程式 |
-| eval.py | 模型驗證與分類報告產出 |
-| best_model.pth | 訓練完成後效果最佳的模型參數檔案 |
+| grpc_server.py | 架設server已進行即時串流影片分類|
+| yolo.py | 訓練yolo模型用 |
+| yolo11n.pt | 訓練完成後效果最佳的yolo模型|
+| image_stream_pb2.py | grpc串流協定用|
+| image_stream_pb2_grpc.py | grpc串流協定用|
 ---
 
 ## 安裝與環境配置

@@ -65,7 +65,16 @@ flowchart TD
 
 
 ```
+## 專案檔案說明
 
+| 檔名 | 說明 |
+|------|------|
+| dataset.py | 處理影片資料讀取與資料擴增 |
+| model.py | ViViT 模型實作程式碼（使用 Model 2） |
+| model_util.py | 模型輔助功能，例如 patch 嵌入等工具函數 |
+| train.py | 模型訓練主程式 |
+| eval.py | 模型驗證與分類報告產出 |
+| best_model.pth | 訓練完成後效果最佳的模型參數檔案 |
 ---
 
 ## 安裝與環境配置

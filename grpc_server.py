@@ -25,9 +25,12 @@ NUM_LAYERS_SPATIAL = 2
 NUM_LAYERS_TEMPORAL = 2
 PATCH_SIZE = 16
 TUBELET_SIZE = 2
-DATASET_PATH = "C:/Users/iceca/Desktop/ViViT-Implementation-main/test" #vivit分類類別資料夾
+DATASET_PATH = "models" #vivit分類類別資料夾
 MODEL_PATH = "models/vivit_model.pth" #vivit model
+CLASSES_FILE = os.path.join(DATASET_PATH, 'class.txt')
 
+with open(CLASSES_FILE, 'r', encoding='utf-8') as f:
+  class_names = [line.strip() for line in f if line.strip()]
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # 模型載入
@@ -36,11 +39,11 @@ tracker = DeepSort(max_age=30, n_init=5, embedder="clip_ViT-B/16")
 vivit_model = ViViT_Factorized(
     in_channels=3, embed_dim=EMBED_DIM, patch_size=PATCH_SIZE, tubelet_size=TUBELET_SIZE,
     num_heads=NUM_HEADS, mlp_dim=MLP_DIM, num_layers_spatial=NUM_LAYERS_SPATIAL, num_layers_temporal=NUM_LAYERS_TEMPORAL,
-    num_classes=len(os.listdir(DATASET_PATH)), num_frames=NUM_FRAMES, img_size=IMG_SIZE, droplayer_p=0.1
+    num_classes=len(class_names), num_frames=NUM_FRAMES, img_size=IMG_SIZE, droplayer_p=0.1
 ).to(device)
 vivit_model.load_state_dict(torch.load(MODEL_PATH))
 vivit_model.eval()
-class_names = sorted(os.listdir(DATASET_PATH))
+
 
 # 狀態追蹤
 track_clips = {}

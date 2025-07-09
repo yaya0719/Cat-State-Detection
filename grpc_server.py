@@ -8,6 +8,8 @@ import threading
 import queue
 import os
 import time
+import requests  
+import json
 
 from ultralytics import YOLO
 from deep_sort_realtime.deepsort_tracker import DeepSort
@@ -26,15 +28,18 @@ NUM_LAYERS_TEMPORAL = 2
 PATCH_SIZE = 16
 TUBELET_SIZE = 2
 DATASET_PATH = "models" #vivit分類類別資料夾
-MODEL_PATH = "models/vivit_model.pth" #vivit model
+MODEL_PATH = "models/best_mode_36l.pth" #vivit model
 CLASSES_FILE = os.path.join(DATASET_PATH, 'class.txt')
 
+# HTTP API 設定
+HTTP_API_URL = "http://localhost:5000/api/classification"  # HTTP API 基礎 URL
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+# 從 txt 讀取類別
 with open(CLASSES_FILE, 'r', encoding='utf-8') as f:
   class_names = [line.strip() for line in f if line.strip()]
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
 # 模型載入
-yolo_model = YOLO("models/yolo11n.pt") # YOLOv11 模型路徑
+yolo_model = YOLO("models/best.pt") # YOLOv11 模型路徑
 tracker = DeepSort(max_age=30, n_init=5, embedder="clip_ViT-B/16")
 vivit_model = ViViT_Factorized(
     in_channels=3, embed_dim=EMBED_DIM, patch_size=PATCH_SIZE, tubelet_size=TUBELET_SIZE,
@@ -48,6 +53,23 @@ vivit_model.eval()
 # 狀態追蹤
 track_clips = {}
 track_labels = {}
+
+# 記錄分類次數到 HTTP API
+def record_classification(user_id, category, confidence):
+    try:
+            
+        data = {
+            "user_id": user_id,
+            "category": category
+        }
+        
+        response = requests.post(HTTP_API_URL, json=data, timeout=2)
+        if response.status_code == 200:
+            print(f"Successfully recorded {category} for user {user_id} (confidence: {confidence:.2f})")
+        else:
+            print(f"Failed to record classification: {response.status_code}")
+    except Exception as e:
+        print(f"Error recording classification: {e}")
 
 def preprocess_video(frames, frame_size=(224, 224)):
     frames = [cv2.resize(f, frame_size)[:, :, ::-1] for f in frames]
@@ -67,7 +89,7 @@ def predict_action(track_id):
     track_clips[track_id] = track_clips[track_id][-12:]
     return class_names[top_class.item()], top_prob.item()
 
-# 建立多階段處理的佇列，採用 tuple: (frame, result_q)
+# 建立多階段處理
 yolo_queue = queue.Queue()
 tracker_queue = queue.Queue()
 vivit_queue = queue.Queue()
@@ -78,7 +100,7 @@ def predict_worker():
         item = predict_queue.get()
         if item is None:
             break
-        track_id, frames = item
+        track_id, frames, user_id = item  # 新增 user_id 參數
         # 將 frames 資料轉換成 tensor 並執行預測
         frames_tensor = preprocess_video(frames)
         with torch.no_grad():
@@ -86,9 +108,16 @@ def predict_worker():
             probs = torch.nn.functional.softmax(outputs, dim=1)
             top_prob, top_class = torch.max(probs, dim=1)
         label = class_names[top_class.item()]
+        confidence = top_prob.item()
+        
         # 更新該 track 的預測結果
-        track_labels[track_id] = (label, top_prob.item())
-        print(f"Track {track_id} predicted as {label} with probability {top_prob.item():.2f}")
+        track_labels[track_id] = (label, confidence)
+        print(f"Track {track_id} predicted as {label} with probability {confidence:.2f}")
+        
+        # 新增：記錄分類結果到 HTTP API
+        if user_id:
+            record_classification(user_id, label, confidence)
+        
         # 完成預測後，從佇列中移除該工作
         predict_queue.task_done()
 
@@ -98,11 +127,11 @@ def yolo_worker():
         item = yolo_queue.get()
         if item is None:
             break
-        frame, result_q = item
+        frame, result_q, user_id = item  # 新增 user_id 參數
         try:
             results = yolo_model.predict(source=frame, conf=0.6, half=True, verbose=False)
             outputs = results[0].boxes.data.cpu().numpy()
-            tracker_queue.put((frame, outputs, result_q))
+            tracker_queue.put((frame, outputs, result_q, user_id))  # 傳遞 user_id
         except Exception as e:
             print(f"YOLO Error: {e}")
             result_q.put(frame)
@@ -115,7 +144,7 @@ def tracker_worker():
         item = tracker_queue.get()
         if item is None:
             break
-        frame, outputs, result_q = item
+        frame, outputs, result_q, user_id = item  # 新增 user_id 參數
         try:
             detections = []
             for output in outputs:
@@ -124,7 +153,7 @@ def tracker_worker():
                 if class_id == 15:
                     detections.append(([x1, y1, x2 - x1, y2 - y1], output[4], 'cat'))
             tracks = tracker.update_tracks(detections, frame=frame)
-            vivit_queue.put((frame, tracks, result_q))
+            vivit_queue.put((frame, tracks, result_q, user_id))  # 傳遞 user_id
         except Exception as e:
             print(f"Tracker Error: {e}")
             result_q.put(frame)
@@ -137,7 +166,7 @@ def vivit_worker():
         item = vivit_queue.get()
         if item is None:
             break
-        frame, tracks, result_q = item
+        frame, tracks, result_q, user_id = item  
         try:
             for track in tracks:
                 if not track.is_confirmed():
@@ -152,7 +181,7 @@ def vivit_worker():
 
                 # 當累積 frame 達到設定值時，將預測任務丟到 predict_queue，但不阻塞等待結果
                 if len(track_clips[track_id]) >= NUM_FRAMES:
-                    predict_queue.put((track_id, list(track_clips[track_id])))
+                    predict_queue.put((track_id, list(track_clips[track_id]), user_id))  
                     track_clips[track_id] = track_clips[track_id][-12:]
                 
 
@@ -186,6 +215,10 @@ vivit_thread.start()
 # gRPC 服務
 class ImageStreamService(image_stream_pb2_grpc.ImageStreamServiceServicer):
     def StreamImages(self, request_iterator, context):
+        # 嘗試從 metadata 中取得 user_id，如果沒有則使用預設值
+        metadata = dict(context.invocation_metadata())
+        user_id = metadata.get('user-id', 'default_user')  # 從 metadata 取得 user_id
+        
         for req in request_iterator:
             try:
                 
@@ -194,8 +227,8 @@ class ImageStreamService(image_stream_pb2_grpc.ImageStreamServiceServicer):
                 frame = cv2.imdecode(frame_data, cv2.IMREAD_COLOR)
                 # 為此 frame 建立專屬的結果佇列
                 result_q = queue.Queue()
-                # 將 frame 放入 YOLO 佇列，並傳遞 result_q
-                yolo_queue.put((frame, result_q))
+                # 將 frame 放入 YOLO 佇列，並傳遞 result_q 和 user_id
+                yolo_queue.put((frame, result_q, user_id))
                 # 等待處理完成，設定 timeout 避免無限等待（例如 5 秒）
                 processed_frame = result_q.get(timeout=5)
                 _, encoded_img = cv2.imencode('.jpg', processed_frame)

@@ -1,0 +1,32 @@
+{
+  "default_user": {
+    "total_count": 32,
+    "categories": {
+      "eating": 32,
+      "licking": 0,
+      "relex": 0,
+      "toilet": 0
+    },
+    "last_update": "2025-07-07T15:15:13.135802"
+  },
+  "承燁": {
+    "total_count": 26,
+    "categories": {
+      "eating": 26,
+      "licking": 0,
+      "relex": 0,
+      "toilet": 0
+    },
+    "last_update": "2025-07-08T21:47:48.522772"
+  },
+  "喵嗚": {
+    "total_count": 0,
+    "categories": {
+      "eating": 0,
+      "licking": 0,
+      "relex": 0,
+      "toilet": 0
+    },
+    "last_update": "2025-07-09T18:03:52.220410"
+  }
+}

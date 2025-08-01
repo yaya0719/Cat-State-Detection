@@ -139,7 +139,7 @@ pip install deep_sort_realtime
 
 ```bash
 python grpc_server.py
-
+```
 #### 成功驗證
 
 若出現以下訊息，表示伺服器啟動成功：
@@ -167,6 +167,7 @@ gRPC Server listening on port 50051
 
 ```bash
 flutter run
+```
 ---
 
 ## 範例

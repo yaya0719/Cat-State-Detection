@@ -113,22 +113,60 @@ pip install deep_sort_realtime
 
 ## 使用方法
 
-1. **模型準備**  
-   - 將 YOLOv11 模型權重（例如 `yolov11.pt`）放在專案目錄下或指定路徑。
-   - 配置 DeepSORT 與 ViViT 所需模型權重，並確認路徑配置正確。
+### 模型部分（Model）
 
-2. **修改參數**  
-   - 根據需求編輯程式碼中的參數，例如輸入影片路徑、輸出影片路徑、信心閾值、追蹤器參數（如 `max_age`）等。
+#### 準備模型權重
 
-3. **執行主程式**  
-   運行主程式，即可進行影片的目標偵測、追蹤及分類：
-   ```bash
-   python grpc_server.py
-   ```
+請將 YOLOv11 模型權重（例如 `yolov11.pt`）放置於專案根目錄或指定的模型路徑下。  
+同時準備 ViViT 模型與 DeepSORT 追蹤模型所需的參數檔案，並確認在程式碼中所設定的路徑正確。
 
-4. **查看輸出**  
-   程式將會架設flask server已接收手機app傳輸之串流並進行及時分類。
+#### 參數設定
 
+根據實際需求調整以下參數：
+
+- 輸入影片路徑  
+- 輸出影片儲存路徑  
+- YOLO 信心閾值（confidence threshold）  
+- DeepSORT 追蹤器參數（如 `max_age`, `n_init` 等）
+
+---
+
+### Server 部分（gRPC 分類伺服器）
+
+#### 啟動伺服器
+
+執行以下指令以啟動 gRPC server：
+
+```bash
+python grpc_server.py
+
+#### 成功驗證
+
+若出現以下訊息，表示伺服器啟動成功：
+
+gRPC Server listening on port 50051
+
+### Camera 部分（Flutter 相機應用）
+
+#### 執行方式
+
+使用 `flutter_application_camera/lib/main.dart` 作為主入口，並透過下列方式其一進行執行：
+
+- 模擬器方式：
+  - 使用 Android Studio 模擬器執行 `main.dart`
+
+- 實體手機方式：
+  - 使用 USB 連接 Android 裝置
+  - 手機需啟用「開發者模式」
+  - 開啟「USB 偵錯」及「透過 USB 安裝應用程式」
+  - 確認已安裝正確驅動與授權
+
+#### 啟動相機串流
+
+執行以下指令以啟動 Flutter 相機應用：
+
+```bash
+flutter run
 ---
 
 ## 範例

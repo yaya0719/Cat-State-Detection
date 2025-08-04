@@ -231,11 +231,11 @@ class ImageStreamService(image_stream_pb2_grpc.ImageStreamServiceServicer):
                 yolo_queue.put((frame, result_q, user_id))
                 # 等待處理完成，設定 timeout 避免無限等待（例如 5 秒）
                 processed_frame = result_q.get(timeout=5)
-                _, encoded_img = cv2.imencode('.jpg', processed_frame)
+                #_, encoded_img = cv2.imencode('.jpg', processed_frame)
                 end_time = time.time()  # End timer
                 print(f"Frame processing time: {(end_time - start_time)*1000:.2f} ms")
                 
-                yield image_stream_pb2.ImageResponse(image=encoded_img.tobytes())
+                #yield image_stream_pb2.ImageResponse(image=encoded_img.tobytes())
             except Exception as e:
                 print(f"gRPC Error: {e}")
                 continue

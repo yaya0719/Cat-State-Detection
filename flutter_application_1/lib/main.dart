@@ -3,14 +3,12 @@ import 'dart:typed_data';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:camera/camera.dart';
-import 'package:image/image.dart' as img;
 import 'package:grpc/grpc.dart';
 import 'package:http/http.dart' as http;
 import 'generated/image_stream.pbgrpc.dart';
 
 class ServerConfig {
-  static String serverIp = '192.168.0.30'; // 預設 IP
+  static String serverIp = '192.168.1.112'; // 預設 IP
   static String currentUser = 'default_user'; // 預設用戶名
   static String get httpApiUrl =>
       'http://$serverIp:5000/api'; // HTTP API 基礎 URL
@@ -65,7 +63,7 @@ class MainMenuPage extends StatelessWidget {
                 padding: const EdgeInsets.only(bottom: 60),
                 child: Column(
                   children: [
-                    _buildButton(context, '開始', () {
+                    _buildButton(context, '接收辨識結果', () {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
@@ -234,30 +232,25 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 }
 
-// 🎥 原始串流頁面（不變）
+// 🎥 影像接收與顯示頁面（接收處理過的影片）
 class CameraGrpcStreamPage extends StatefulWidget {
   @override
   _CameraGrpcStreamPageState createState() => _CameraGrpcStreamPageState();
 }
 
 class _CameraGrpcStreamPageState extends State<CameraGrpcStreamPage> {
-  CameraController? _controller;
-  List<CameraDescription>? _cameras;
-  bool _isStreaming = false;
+  bool _isReceiving = false;
   late ClientChannel _channel;
   late ImageStreamServiceClient _stub;
-  late Stream<ImageRequest> _imageRequestStream;
-  late StreamController<ImageRequest> _grpcImageStreamController;
-
-  int _lastSentTimestamp = 0;
+  StreamSubscription<ImageResponse>? _responseSubscription;
 
   Uint8List? _currentImage;
   Uint8List? _lastImage;
+  String _detectionResult = "等待辨識結果...";
 
   @override
   void initState() {
     super.initState();
-    _initializeCamera();
     _setupGrpc();
   }
 
@@ -268,122 +261,158 @@ class _CameraGrpcStreamPageState extends State<CameraGrpcStreamPage> {
       options: const ChannelOptions(credentials: ChannelCredentials.insecure()),
     );
     _stub = ImageStreamServiceClient(_channel);
-    _grpcImageStreamController = StreamController<ImageRequest>();
-    _imageRequestStream = _grpcImageStreamController.stream;
+  }
 
-    // 建立 gRPC 呼叫時傳遞 user_id 到 metadata
-    final callOptions = CallOptions(
-      metadata: {'user-id': ServerConfig.currentUser},
-    );
+  Future<void> _startReceiving() async {
+    if (_isReceiving) return;
 
-    _stub.streamImages(_imageRequestStream, options: callOptions).listen((
-      response,
-    ) {
-      final imageBytes = Uint8List.fromList(response.image);
-      if (imageBytes.isEmpty) return;
+    try {
+      // 建立空的請求流來開始接收處理過的影像
+      final requestController = StreamController<ImageRequest>();
+
+      // 建立 gRPC 呼叫，傳遞用戶資訊
+      final callOptions = CallOptions(
+        metadata: {'user-id': ServerConfig.currentUser},
+      );
+
+      final responseStream = _stub.streamImages(
+        requestController.stream,
+        options: callOptions,
+      );
+
+      // 監聽回應流
+      _responseSubscription = responseStream.listen(
+        (response) {
+          final imageBytes = Uint8List.fromList(response.image);
+          if (imageBytes.isEmpty) return;
+
+          setState(() {
+            _currentImage = imageBytes;
+            _lastImage = imageBytes;
+            // 如果有檢測結果，可以從 response 中獲取
+            _detectionResult =
+                "已接收影像 (${DateTime.now().millisecondsSinceEpoch})";
+          });
+        },
+        onError: (error) {
+          print('gRPC 錯誤: $error');
+          setState(() {
+            _detectionResult = "連線錯誤: $error";
+          });
+        },
+        onDone: () {
+          print('gRPC 串流結束');
+          setState(() {
+            _isReceiving = false;
+            _detectionResult = "串流已結束";
+          });
+        },
+      );
+
+      setState(() => _isReceiving = true);
+
+      // 發送一個空請求來啟動接收
+      requestController.add(ImageRequest());
+    } catch (e) {
+      print('啟動接收失敗: $e');
       setState(() {
-        _currentImage = imageBytes;
-        _lastImage = imageBytes;
+        _detectionResult = "啟動失敗: $e";
       });
-    });
-  }
-
-  Future<void> _initializeCamera() async {
-    _cameras = await availableCameras();
-    _controller = CameraController(_cameras!.first, ResolutionPreset.low);
-    await _controller!.initialize();
-    setState(() {});
-  }
-
-  Future<void> _startStreaming() async {
-    if (_controller == null ||
-        !_controller!.value.isInitialized ||
-        _isStreaming)
-      return;
-    await _controller!.startImageStream((CameraImage image) async {
-      final now = DateTime.now().millisecondsSinceEpoch;
-      if (now - _lastSentTimestamp < 40) return;
-      _lastSentTimestamp = now;
-
-      final jpegBytes = await _convertYUV420ToJpeg(image);
-      final request = ImageRequest()..image = Uint8List.fromList(jpegBytes);
-      _grpcImageStreamController.add(request);
-    });
-
-    setState(() => _isStreaming = true);
-  }
-
-  Future<void> _stopStreaming() async {
-    if (_controller != null &&
-        _controller!.value.isInitialized &&
-        _isStreaming) {
-      await _controller!.stopImageStream();
-      setState(() => _isStreaming = false);
     }
   }
 
-  Future<Uint8List> _convertYUV420ToJpeg(CameraImage image) async {
-    final width = image.width;
-    final height = image.height;
-    final img.Image rgbImage = img.Image(width: width, height: height);
+  Future<void> _stopReceiving() async {
+    if (!_isReceiving) return;
 
-    final yPlane = image.planes[0];
-    final uPlane = image.planes[1];
-    final vPlane = image.planes[2];
+    await _responseSubscription?.cancel();
+    _responseSubscription = null;
 
-    final yBytes = yPlane.bytes;
-    final uBytes = uPlane.bytes;
-    final vBytes = vPlane.bytes;
-
-    final rowStrideY = yPlane.bytesPerRow;
-    final rowStrideUV = uPlane.bytesPerRow;
-    final pixelStrideUV = uPlane.bytesPerPixel!;
-
-    for (int y = 0; y < height; y++) {
-      for (int x = 0; x < width; x++) {
-        final uvIndex = (rowStrideUV * (y ~/ 2)) + (x ~/ 2) * pixelStrideUV;
-        final yIndex = y * rowStrideY + x;
-
-        final yVal = yBytes[yIndex];
-        final uVal = uBytes[uvIndex];
-        final vVal = vBytes[uvIndex];
-
-        final r = (yVal + 1.370705 * (vVal - 128)).clamp(0, 255).toInt();
-        final g =
-            (yVal - 0.337633 * (uVal - 128) - 0.698001 * (vVal - 128))
-                .clamp(0, 255)
-                .toInt();
-        final b = (yVal + 1.732446 * (uVal - 128)).clamp(0, 255).toInt();
-
-        rgbImage.setPixelRgb(x, y, r, g, b);
-      }
-    }
-
-    return Uint8List.fromList(img.encodeJpg(rgbImage, quality: 20));
+    setState(() {
+      _isReceiving = false;
+      _detectionResult = "已停止接收";
+    });
   }
 
   @override
   void dispose() {
-    _controller?.dispose();
-    _grpcImageStreamController.close();
+    _responseSubscription?.cancel();
     _channel.shutdown();
     super.dispose();
   }
 
   Widget _buildStreamView() {
     if (_currentImage != null && _currentImage!.isNotEmpty) {
-      return Image.memory(_currentImage!, gaplessPlayback: true);
+      return Column(
+        children: [
+          Expanded(
+            child: Image.memory(
+              _currentImage!,
+              gaplessPlayback: true,
+              fit: BoxFit.contain,
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.all(10),
+            margin: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: Colors.black.withOpacity(0.7),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Text(
+              _detectionResult,
+              style: const TextStyle(color: Colors.white, fontSize: 14),
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ],
+      );
     } else if (_lastImage != null && _lastImage!.isNotEmpty) {
-      return Image.memory(_lastImage!, gaplessPlayback: true);
+      return Column(
+        children: [
+          Expanded(
+            child: Image.memory(
+              _lastImage!,
+              gaplessPlayback: true,
+              fit: BoxFit.contain,
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.all(10),
+            margin: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: Colors.black.withOpacity(0.7),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Text(
+              "顯示最後一張影像",
+              style: const TextStyle(color: Colors.white, fontSize: 14),
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ],
+      );
     } else {
-      return const Text("等待影像...");
+      return const Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.videocam_off, size: 80, color: Colors.grey),
+          SizedBox(height: 20),
+          Text(
+            "等待接收處理過的影像...",
+            style: TextStyle(fontSize: 16, color: Colors.grey),
+          ),
+        ],
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('gRPC 相機串流')),
+      appBar: AppBar(
+        title: const Text('貓咪行為辨識結果'),
+        backgroundColor: Colors.blue,
+      ),
       body: Column(
         children: [
           Expanded(
@@ -391,16 +420,21 @@ class _CameraGrpcStreamPageState extends State<CameraGrpcStreamPage> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  if (_controller == null || !_controller!.value.isInitialized)
-                    CircularProgressIndicator()
-                  else if (_isStreaming)
-                    _buildStreamView()
-                  else
-                    const Text('按下按鈕開始串流'),
+                  Expanded(child: _buildStreamView()),
                   const SizedBox(height: 20),
                   ElevatedButton(
-                    onPressed: _isStreaming ? _stopStreaming : _startStreaming,
-                    child: Text(_isStreaming ? '停止串流' : '開始串流'),
+                    onPressed: _isReceiving ? _stopReceiving : _startReceiving,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _isReceiving ? Colors.red : Colors.green,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 30,
+                        vertical: 15,
+                      ),
+                    ),
+                    child: Text(
+                      _isReceiving ? '停止接收' : '開始接收',
+                      style: const TextStyle(fontSize: 18),
+                    ),
                   ),
                 ],
               ),
@@ -428,23 +462,24 @@ class _CameraGrpcStreamPageState extends State<CameraGrpcStreamPage> {
                   ),
                 ),
                 const SizedBox(width: 15),
-                // 狀態提示按鈕（保持原有功能）
+                // 狀態提示按鈕
                 Expanded(
                   child: ElevatedButton(
                     onPressed: () {
-                      // 顯示目前用戶資訊
+                      // 顯示目前狀態資訊
                       showDialog(
                         context: context,
                         builder:
                             (context) => AlertDialog(
-                              title: const Text('目前狀態'),
+                              title: const Text('系統狀態'),
                               content: Column(
                                 mainAxisSize: MainAxisSize.min,
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text('用戶: ${ServerConfig.currentUser}'),
                                   Text('伺服器: ${ServerConfig.serverIp}:50051'),
-                                  Text('串流狀態: ${_isStreaming ? "進行中" : "已停止"}'),
+                                  Text('接收狀態: ${_isReceiving ? "進行中" : "已停止"}'),
+                                  Text('辨識結果: $_detectionResult'),
                                 ],
                               ),
                               actions: [

@@ -10,6 +10,7 @@ import os
 import time
 import requests  
 import json
+from collections import defaultdict
 
 from ultralytics import YOLO
 from deep_sort_realtime.deepsort_tracker import DeepSort
@@ -53,6 +54,14 @@ vivit_model.eval()
 # 狀態追蹤
 track_clips = {}
 track_labels = {}
+
+# 用戶影像緩存：存儲每個用戶的最新處理後影像
+user_frames = defaultdict(lambda: None)
+user_frame_locks = defaultdict(threading.Lock)
+
+# 觀看者管理：每個用戶的觀看者佇列
+user_watchers = defaultdict(list)
+watcher_locks = defaultdict(threading.Lock)
 
 # 記錄分類次數到 HTTP API
 def record_classification(user_id, category, confidence):
@@ -214,15 +223,122 @@ vivit_thread.start()
 
 # gRPC 服務
 class ImageStreamService(image_stream_pb2_grpc.ImageStreamServiceServicer):
-    def StreamImages(self, request_iterator, context):
-        # 嘗試從 metadata 中取得 user_id，如果沒有則使用預設值
+    
+    def UploadStream(self, request_iterator, context):
+        # 從 metadata 取得相機的 user_id
         metadata = dict(context.invocation_metadata())
-        user_id = metadata.get('user-id', 'default_user')  # 從 metadata 取得 user_id
+        user_id = metadata.get('user-id', 'default_camera')
+        print(f"相機連接: user_id={user_id}")
+        
+        try:
+            for request in request_iterator:
+                start_time = time.time()
+                frame_data = np.frombuffer(request.image, dtype=np.uint8)
+                frame = cv2.imdecode(frame_data, cv2.IMREAD_COLOR)
+                
+                # 建立結果佇列並處理
+                result_q = queue.Queue()
+                yolo_queue.put((frame, result_q, user_id))
+                
+                try:
+                    processed_frame = result_q.get(timeout=5)
+                    
+                    # 更新該用戶的最新影像
+                    with user_frame_locks[user_id]:
+                        _, encoded_img = cv2.imencode('.jpg', processed_frame)
+                        user_frames[user_id] = {
+                            'image': encoded_img.tobytes(),
+                            'timestamp': int(time.time() * 1000)
+                        }
+                    
+                    # 通知該用戶的所有觀看者
+                    self._notify_watchers(user_id)
+                    
+                    end_time = time.time()
+                    print(f"Frame processing time: {(end_time - start_time)*1000:.2f} ms")
+                    
+                except queue.Empty:
+                    print(f"處理超時: user_id={user_id}")
+                    
+            return image_stream_pb2.UploadResponse(
+                success=True,
+                message=f"Upload completed for {user_id}"
+            )
+            
+        except Exception as e:
+            print(f"UploadStream Error: {e}")
+            return image_stream_pb2.UploadResponse(
+                success=False,
+                message=f"Error: {e}"
+            )
+    
+    def WatchStream(self, request, context):
+        # 從 metadata 取得要觀看的 user_id
+        metadata = dict(context.invocation_metadata())
+        user_id = metadata.get('user-id', 'default_camera')
+        print(f"觀看者連接: watching user_id={user_id}")
+        
+        # 建立觀看者佇列
+        watcher_queue = queue.Queue()
+        
+        # 註冊觀看者
+        with watcher_locks[user_id]:
+            user_watchers[user_id].append(watcher_queue)
+        
+        try:
+            # 如果已有最新影像，立即發送
+            with user_frame_locks[user_id]:
+                if user_frames[user_id]:
+                    frame_data = user_frames[user_id]
+                    yield image_stream_pb2.ImageResponse(
+                        image=frame_data['image']
+                    )
+            
+            # 持續等待新影像
+            while context.is_active():
+                try:
+                    # 等待新影像通知（10秒超時）
+                    frame_data = watcher_queue.get(timeout=10)
+                    if frame_data is None:  # 結束信號
+                        break
+                        
+                    yield image_stream_pb2.ImageResponse(
+                        image=frame_data['image']
+                    )
+                    
+                except queue.Empty:
+                    # 發送心跳包（空影像）
+                    yield image_stream_pb2.ImageResponse(image=b'')
+                    
+        except Exception as e:
+            print(f"WatchStream Error: {e}")
+        finally:
+            # 移除觀看者
+            with watcher_locks[user_id]:
+                if watcher_queue in user_watchers[user_id]:
+                    user_watchers[user_id].remove(watcher_queue)
+            print(f"觀看者斷線: user_id={user_id}")
+    
+    def _notify_watchers(self, user_id):
+    
+        frame_data = user_frames[user_id]
+        with watcher_locks[user_id]:
+            for watcher_queue in user_watchers[user_id][:]:  # 複製列表避免修改問題
+                try:
+                    watcher_queue.put_nowait(frame_data)
+                except queue.Full:
+                    # 如果佇列滿了，移除該觀看者
+                    user_watchers[user_id].remove(watcher_queue)
+
+    def StreamImages(self, request_iterator, context):
+      
+        # 從 metadata 取得 user_id，如果沒有則使用預設值
+        metadata = dict(context.invocation_metadata())
+        user_id = metadata.get('user-id', 'default_user')
         
         for req in request_iterator:
             try:
-                
-                start_time = time.time()  # Start timer
+                start_time = time.time()
                 frame_data = np.frombuffer(req.image, dtype=np.uint8)
                 frame = cv2.imdecode(frame_data, cv2.IMREAD_COLOR)
                 # 為此 frame 建立專屬的結果佇列
@@ -231,11 +347,11 @@ class ImageStreamService(image_stream_pb2_grpc.ImageStreamServiceServicer):
                 yolo_queue.put((frame, result_q, user_id))
                 # 等待處理完成，設定 timeout 避免無限等待（例如 5 秒）
                 processed_frame = result_q.get(timeout=5)
-                #_, encoded_img = cv2.imencode('.jpg', processed_frame)
-                end_time = time.time()  # End timer
+                _, encoded_img = cv2.imencode('.jpg', processed_frame)
+                end_time = time.time()
                 print(f"Frame processing time: {(end_time - start_time)*1000:.2f} ms")
                 
-                #yield image_stream_pb2.ImageResponse(image=encoded_img.tobytes())
+                yield image_stream_pb2.ImageResponse(image=encoded_img.tobytes())
             except Exception as e:
                 print(f"gRPC Error: {e}")
                 continue

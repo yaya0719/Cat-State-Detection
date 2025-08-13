@@ -1,7 +1,14 @@
 syntax = "proto3";
 
 service ImageStreamService {
-  rpc StreamImages(stream ImageRequest) returns (ImageResponse);
+
+  rpc StreamImages(stream ImageRequest) returns (stream ImageResponse);
+  
+
+  rpc UploadStream(stream ImageRequest) returns (UploadResponse);
+  
+
+  rpc WatchStream(WatchRequest) returns (stream ImageResponse);
 }
 
 message ImageRequest {
@@ -10,4 +17,14 @@ message ImageRequest {
 
 message ImageResponse {
   bytes image = 1;
+}
+
+// 新增：上傳回應
+message UploadResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+
+message WatchRequest {
 }

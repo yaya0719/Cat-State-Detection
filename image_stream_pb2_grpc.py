@@ -5,7 +5,7 @@ import warnings
 
 import image_stream_pb2 as image__stream__pb2
 
-GRPC_GENERATED_VERSION = '1.71.0'
+GRPC_GENERATED_VERSION = '1.73.1'
 GRPC_VERSION = grpc.__version__
 _version_not_supported = False
 
@@ -39,13 +39,35 @@ class ImageStreamServiceStub(object):
                 request_serializer=image__stream__pb2.ImageRequest.SerializeToString,
                 response_deserializer=image__stream__pb2.ImageResponse.FromString,
                 _registered_method=True)
+        self.UploadStream = channel.stream_unary(
+                '/ImageStreamService/UploadStream',
+                request_serializer=image__stream__pb2.ImageRequest.SerializeToString,
+                response_deserializer=image__stream__pb2.UploadResponse.FromString,
+                _registered_method=True)
+        self.WatchStream = channel.unary_stream(
+                '/ImageStreamService/WatchStream',
+                request_serializer=image__stream__pb2.WatchRequest.SerializeToString,
+                response_deserializer=image__stream__pb2.ImageResponse.FromString,
+                _registered_method=True)
 
 
 class ImageStreamServiceServicer(object):
     """Missing associated documentation comment in .proto file."""
 
     def StreamImages(self, request_iterator, context):
-        """Missing associated documentation comment in .proto file."""
+
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def UploadStream(self, request_iterator, context):
+
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def WatchStream(self, request, context):
+
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
@@ -56,6 +78,16 @@ def add_ImageStreamServiceServicer_to_server(servicer, server):
             'StreamImages': grpc.stream_stream_rpc_method_handler(
                     servicer.StreamImages,
                     request_deserializer=image__stream__pb2.ImageRequest.FromString,
+                    response_serializer=image__stream__pb2.ImageResponse.SerializeToString,
+            ),
+            'UploadStream': grpc.stream_unary_rpc_method_handler(
+                    servicer.UploadStream,
+                    request_deserializer=image__stream__pb2.ImageRequest.FromString,
+                    response_serializer=image__stream__pb2.UploadResponse.SerializeToString,
+            ),
+            'WatchStream': grpc.unary_stream_rpc_method_handler(
+                    servicer.WatchStream,
+                    request_deserializer=image__stream__pb2.WatchRequest.FromString,
                     response_serializer=image__stream__pb2.ImageResponse.SerializeToString,
             ),
     }
@@ -85,6 +117,60 @@ class ImageStreamService(object):
             target,
             '/ImageStreamService/StreamImages',
             image__stream__pb2.ImageRequest.SerializeToString,
+            image__stream__pb2.ImageResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def UploadStream(request_iterator,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.stream_unary(
+            request_iterator,
+            target,
+            '/ImageStreamService/UploadStream',
+            image__stream__pb2.ImageRequest.SerializeToString,
+            image__stream__pb2.UploadResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def WatchStream(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_stream(
+            request,
+            target,
+            '/ImageStreamService/WatchStream',
+            image__stream__pb2.WatchRequest.SerializeToString,
             image__stream__pb2.ImageResponse.FromString,
             options,
             channel_credentials,

@@ -267,29 +267,35 @@ class _CameraGrpcStreamPageState extends State<CameraGrpcStreamPage> {
     if (_isReceiving) return;
 
     try {
-      // 建立空的請求流來開始接收處理過的影像
-      final requestController = StreamController<ImageRequest>();
-
-      // 建立 gRPC 呼叫，傳遞用戶資訊
+      // 使用 metadata 指定要觀看的用戶（相機的 user_id）
       final callOptions = CallOptions(
-        metadata: {'user-id': ServerConfig.currentUser},
+        metadata: {
+          'user-id': ServerConfig.currentUser, // 要觀看的相機用戶 ID
+        },
       );
 
-      final responseStream = _stub.streamImages(
-        requestController.stream,
+      // 建立觀看請求
+      final watchRequest = WatchRequest();
+
+      // 呼叫新的 WatchStream 方法
+      final responseStream = _stub.watchStream(
+        watchRequest,
         options: callOptions,
       );
 
-      // 監聽回應流
       _responseSubscription = responseStream.listen(
         (response) {
-          final imageBytes = Uint8List.fromList(response.image);
-          if (imageBytes.isEmpty) return;
+          if (response.image.isEmpty) {
+            setState(() {
+              _detectionResult = "連線正常 - ${DateTime.now().toString()}";
+            });
+            return;
+          }
 
+          final imageBytes = Uint8List.fromList(response.image);
           setState(() {
             _currentImage = imageBytes;
             _lastImage = imageBytes;
-            // 如果有檢測結果，可以從 response 中獲取
             _detectionResult =
                 "已接收影像 (${DateTime.now().millisecondsSinceEpoch})";
           });
@@ -310,9 +316,6 @@ class _CameraGrpcStreamPageState extends State<CameraGrpcStreamPage> {
       );
 
       setState(() => _isReceiving = true);
-
-      // 發送一個空請求來啟動接收
-      requestController.add(ImageRequest());
     } catch (e) {
       print('啟動接收失敗: $e');
       setState(() {

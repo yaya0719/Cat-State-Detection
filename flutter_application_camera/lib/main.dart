@@ -78,11 +78,11 @@ class _CameraGrpcStreamPageState extends State<CameraGrpcStreamPage> {
     _stub = ImageStreamServiceClient(_channel); // 來自.proto
     _imageRequestStreamController = StreamController<ImageRequest>();
 
-    _stub.streamImages(
+    _stub.uploadStream(
       //gRPC 定義的串流方法,把 image stream 傳給 server
       _imageRequestStreamController.stream,
       options: CallOptions(
-        metadata: {'user-id': 'test-user'},
+        metadata: {'user-id': 'default_user'},
       ), // 傳使用者資訊給 server（例如 user-id）
     );
   }

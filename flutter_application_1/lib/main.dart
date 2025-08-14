@@ -345,66 +345,80 @@ class _CameraGrpcStreamPageState extends State<CameraGrpcStreamPage> {
 
   Widget _buildStreamView() {
     if (_currentImage != null && _currentImage!.isNotEmpty) {
-      return Column(
+      return Stack(
         children: [
-          Expanded(
+          // 影像填滿整個空間
+          Positioned.fill(
             child: Image.memory(
               _currentImage!,
               gaplessPlayback: true,
-              fit: BoxFit.contain,
+              fit: BoxFit.cover, // 改為 cover 讓影像填滿整個空間
             ),
           ),
-          Container(
-            padding: const EdgeInsets.all(10),
-            margin: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.7),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Text(
-              _detectionResult,
-              style: const TextStyle(color: Colors.white, fontSize: 14),
-              textAlign: TextAlign.center,
+          // 辨識結果浮動顯示在底部
+          Positioned(
+            bottom: 10,
+            left: 10,
+            right: 10,
+            child: Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.7),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                _detectionResult,
+                style: const TextStyle(color: Colors.white, fontSize: 14),
+                textAlign: TextAlign.center,
+              ),
             ),
           ),
         ],
       );
     } else if (_lastImage != null && _lastImage!.isNotEmpty) {
-      return Column(
+      return Stack(
         children: [
-          Expanded(
+          // 最後一張影像填滿整個空間
+          Positioned.fill(
             child: Image.memory(
               _lastImage!,
               gaplessPlayback: true,
-              fit: BoxFit.contain,
+              fit: BoxFit.cover, // 改為 cover 讓影像填滿整個空間
             ),
           ),
-          Container(
-            padding: const EdgeInsets.all(10),
-            margin: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.7),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Text(
-              "顯示最後一張影像",
-              style: const TextStyle(color: Colors.white, fontSize: 14),
-              textAlign: TextAlign.center,
+          // 狀態顯示浮動在底部
+          Positioned(
+            bottom: 10,
+            left: 10,
+            right: 10,
+            child: Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.7),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Text(
+                "顯示最後一張影像",
+                style: TextStyle(color: Colors.white, fontSize: 14),
+                textAlign: TextAlign.center,
+              ),
             ),
           ),
         ],
       );
     } else {
-      return const Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.videocam_off, size: 80, color: Colors.grey),
-          SizedBox(height: 20),
-          Text(
-            "等待接收處理過的影像...",
-            style: TextStyle(fontSize: 16, color: Colors.grey),
-          ),
-        ],
+      return const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.videocam_off, size: 80, color: Colors.grey),
+            SizedBox(height: 20),
+            Text(
+              "等待接收處理過的影像...",
+              style: TextStyle(fontSize: 16, color: Colors.grey),
+            ),
+          ],
+        ),
       );
     }
   }
@@ -412,34 +426,25 @@ class _CameraGrpcStreamPageState extends State<CameraGrpcStreamPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('貓咪行為辨識結果'),
-        backgroundColor: Colors.blue,
-      ),
       body: Column(
         children: [
-          Expanded(
-            child: Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Expanded(child: _buildStreamView()),
-                  const SizedBox(height: 20),
-                  ElevatedButton(
-                    onPressed: _isReceiving ? _stopReceiving : _startReceiving,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: _isReceiving ? Colors.red : Colors.green,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 30,
-                        vertical: 15,
-                      ),
-                    ),
-                    child: Text(
-                      _isReceiving ? '停止接收' : '開始接收',
-                      style: const TextStyle(fontSize: 18),
-                    ),
-                  ),
-                ],
+          // 影像顯示區域 - 與相機端一樣大
+          Expanded(child: _buildStreamView()),
+          // 控制按鈕區域
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: ElevatedButton(
+              onPressed: _isReceiving ? _stopReceiving : _startReceiving,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _isReceiving ? Colors.red : Colors.green,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 30,
+                  vertical: 15,
+                ),
+              ),
+              child: Text(
+                _isReceiving ? '停止接收' : '開始接收',
+                style: const TextStyle(fontSize: 18),
               ),
             ),
           ),
